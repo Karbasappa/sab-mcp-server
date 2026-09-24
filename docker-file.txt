@@ -1,0 +1,28 @@
+# --- Stage 1: Build the application ---
+FROM maven:3.9.6-eclipse-temurin-17 AS builder
+WORKDIR /app
+
+# Copy pom.xml and download dependencies to leverage Docker layer caching
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+# Copy source code and build the executable jar package
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# --- Stage 2: Create the runtime execution environment ---
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+
+# Create a non-root system user for security safety
+RUN useradd -ms /bin/bash mcpuser
+USER mcpuser
+
+# Copy the built jar artifact from Stage 1
+COPY --from=builder /app/target/mcp-server-0.0.1-SNAPSHOT.jar app.jar
+
+# Expose the HTTP port (Only needed if running as an HTTP/SSE server)
+EXPOSE 8082
+
+# Start the application
+ENTRYPOINT ["java", "-jar", "app.jar"]
